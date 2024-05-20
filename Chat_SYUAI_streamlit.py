@@ -52,18 +52,30 @@ def upload_page():
     # 파일 업로더 초기화
     uploaded_file = st.file_uploader("Choose a PDF or Image file", type=['pdf', 'png', 'jpg', 'jpeg'], key='file_uploader')
 
-    def process_document(uploaded_file, mime_type):
-        opts = ClientOptions(api_endpoint=f"{location}-documentai.googleapis.com")
-        client = documentai.DocumentProcessorServiceClient(client_options=opts)
-        name = client.processor_version_path(project_id, location, processor_id, processor_version_id)
+    def handle_user_input():
+        if "pdf_text" in st.session_state:
+            # PDF 내용과 사용자 입력 결합
+            query = st.session_state.pdf_text + " " + st.session_state.user_input + " 에 대해서 정리하고 요약해줘."
+        else:
+            query = st.session_state.user_input + " 에 대해서 정리하고 요약해줘."
 
-        # 메모리에서 바로 파일 읽기
-        image_content = uploaded_file.getvalue()
-        raw_document = documentai.RawDocument(content=image_content, mime_type=mime_type)
-        request = documentai.ProcessRequest(name=name, raw_document=raw_document, field_mask=field_mask)
-        result = client.process_document(request=request)
-        return result.document.text
+        with st.spinner("Generating response..."):
+            response = model.generate_content(query)
+            st.session_state.response = response.text  # 응답을 세션 상태에 저장
 
+    # 사용자 입력 받기
+    st.text_input("추가로 입력할 메시지를 작성해주세요:", key="user_input", on_change=handle_user_input)
+
+    # 응답 표시 및 초기화 버튼
+    if "response" in st.session_state:
+        st.write(st.session_state.response)
+        if st.button("다시 질문하기"):
+            del st.session_state.pdf_text
+            del st.session_state.user_input
+            del st.session_state.response
+            st.experimental_rerun()
+
+    # PDF/이미지 파일 처리
     if uploaded_file is not None:
         with st.spinner("Processing document..."):
             # 파일 타입에 따른 MIME 타입 설정
@@ -78,31 +90,23 @@ def upload_page():
                 st.error("지원되지 않는 파일 형식입니다.")
                 return
 
+            # 문서 처리 함수
+            def process_document(uploaded_file, mime_type):
+                opts = ClientOptions(api_endpoint=f"{location}-documentai.googleapis.com")
+                client = documentai.DocumentProcessorServiceClient(client_options=opts)
+                name = client.processor_version_path(project_id, location, processor_id, processor_version_id)
+
+                # 메모리에서 바로 파일 읽기
+                image_content = uploaded_file.getvalue()
+                raw_document = documentai.RawDocument(content=image_content, mime_type=mime_type)
+                request = documentai.ProcessRequest(name=name, raw_document=raw_document, field_mask=field_mask)
+                result = client.process_document(request=request)
+                return result.document.text
+
             # PDF/이미지 텍스트 추출
             pdf_text = process_document(uploaded_file, mime_type)
             st.session_state.pdf_text = pdf_text  # 상태 저장
-            st.session_state.response = None  # 응답 초기화
             st.success("Document processed successfully.")
-
-    def handle_user_input():
-        if "pdf_text" in st.session_state:
-            # PDF 내용과 사용자 입력 결합
-            query = st.session_state.pdf_text + " " + st.session_state.user_input + " 에 대해서 정리하고 요약해줘."
-            with st.spinner("Generating response..."):
-                response = model.generate_content(query)
-                st.session_state.response = response.text  # 응답을 세션 상태에 저장
-
-    # 사용자 입력 받기
-    st.text_input("추가로 입력할 메시지를 작성해주세요:", key="user_input", on_change=handle_user_input)
-
-    # 응답 표시 및 초기화 버튼
-    if "response" in st.session_state and st.session_state.response:
-        st.write(st.session_state.response)
-        if st.button("다시 질문하기"):
-            del st.session_state.pdf_text
-            del st.session_state.user_input
-            del st.session_state.response
-            st.experimental_rerun()
 
 
 def about_page():
