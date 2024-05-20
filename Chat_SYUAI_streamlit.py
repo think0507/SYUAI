@@ -50,8 +50,7 @@ def upload_page():
     st.title("PDF/Image 파일 업로드 및 처리")
 
     # 파일 업로더 초기화
-    uploaded_file = st.file_uploader("Choose a PDF or Image file", type=['pdf', 'png', 'jpg', 'jpeg'],
-                                     key='file_uploader')
+    uploaded_file = st.file_uploader("Choose a PDF or Image file", type=['pdf', 'png', 'jpg', 'jpeg'], key='file_uploader')
 
     def handle_user_input():
         if "pdf_text" in st.session_state:
@@ -60,15 +59,21 @@ def upload_page():
         else:
             query = st.session_state.user_input + " 에 대해서 정리하고 요약해줘."
 
-        response = model.generate_content(query)
-        st.session_state.response = response.text  # 응답을 세션 상태에 저장
+        with st.spinner("Generating response..."):
+            response = model.generate_content(query)
+            st.session_state.response = response.text  # 응답을 세션 상태에 저장
 
     # 사용자 입력 받기
     st.text_input("추가로 입력할 메시지를 작성해주세요:", key="user_input", on_change=handle_user_input)
 
-    # 응답 표시
+    # 응답 표시 및 초기화 버튼
     if "response" in st.session_state:
         st.write(st.session_state.response)
+        if st.button("다시 질문하기"):
+            del st.session_state.pdf_text
+            del st.session_state.user_input
+            del st.session_state.response
+            st.experimental_rerun()
 
     # PDF/이미지 파일 처리
     if uploaded_file is not None:
